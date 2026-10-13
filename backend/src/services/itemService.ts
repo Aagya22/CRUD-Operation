@@ -11,3 +11,34 @@ export const createItem = async (data: Partial<Item>) => {
 export const getAllItems = async () => {
   return await itemRepository().find();
 };
+
+export const updateItem = async (
+  id: number,
+  data: Partial<Item>
+) => {
+  const repository = itemRepository();
+
+  const item = await repository.findOneBy({ id });
+
+  if (!item) {
+    return null;
+  }
+
+  repository.merge(item, data);
+
+  return await repository.save(item);
+};
+
+export const deleteItem = async (id: number) => {
+  const repository = itemRepository();
+
+  const item = await repository.findOneBy({ id });
+
+  if (!item) {
+    return false;
+  }
+
+  await repository.remove(item);
+
+  return true;
+};
