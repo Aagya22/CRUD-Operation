@@ -1,232 +1,139 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import ItemForm from "../components/itemForm";
+import ItemList from "../components/itemList";
+import {
+  getItems,
+  createItem,
+  updateItem,
+  deleteItem,
+} from "../services/itemAPI";
+import type { Item, ItemFormData } from "../types/item";
 
-type Item = {
-  id: number;
-  name: string;
-  description: string | null;
-  createdAt: string;
-};
-
-const API_URL = "http://localhost:5000/items";
-
-export default function Home() {
+export default function HomePage() {
   const [items, setItems] = useState<Item[]>([]);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [message, setMessage] = useState("");
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
 
-  async function loadItems() {
+  const loadItems = useCallback(async () => {
     try {
-      const response = await fetch(API_URL);
-      if (!response.ok) throw new Error("Could not load items.");
-      setItems(await response.json());
-    } catch {
-      setMessage("Could not connect to the backend.");
+      setError("");
+      const data = await getItems();
+      setItems(data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load items."
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadItems();
-  }, []);
+  }, [loadItems]);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
+  async function handleSubmit(data: ItemFormData) {
+    try {
+      setSaving(true);
+      setError("");
+
+      if (editingItem) {
+        await updateItem(editingItem.id, data);
+        setEditingItem(null);
+      } else {
+        await createItem(data);
+      }
+
+      await loadItems();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to save item."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this item?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      const response = await fetch(
-        editingId === null ? API_URL : `${API_URL}/${editingId}`,
-        {
-          method: editingId === null ? "POST" : "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            description: description.trim(),
-          }),
-        }
+      setDeletingId(id);
+      setError("");
+
+      await deleteItem(id);
+
+      setItems((currentItems) =>
+        currentItems.filter((item) => item.id !== id)
       );
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Could not save item.");
+      if (editingItem?.id === id) {
+        setEditingItem(null);
       }
-
-      setName("");
-      setDescription("");
-      setEditingId(null);
-      setMessage("Item saved successfully!");
-      await loadItems();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Something went wrong.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete item."
+      );
+    } finally {
+      setDeletingId(null);
     }
-  }
-
-  async function deleteItem(id: number) {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
-
-    try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Could not delete item.");
-      }
-
-      if (editingId === id) {
-        setEditingId(null);
-        setName("");
-        setDescription("");
-      }
-
-      setMessage("Item deleted successfully!");
-      await loadItems();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not delete item.");
-    }
-  }
-
-  function editItem(item: Item) {
-    setEditingId(item.id);
-    setName(item.name);
-    setDescription(item.description ?? "");
-    setMessage("");
   }
 
   return (
-    <main
-      style={{
-        maxWidth: 760,
-        margin: "50px auto",
-        padding: "0 20px 40px",
-        fontFamily: "Arial, sans-serif",
-        color: "#222",
-      }}
-    >
-      <h1>Item Manager</h1>
-      <p style={{ color: "#666" }}>
-        Create, view, update, and delete your items.
-      </p>
+    <main className="page-container">
+      <header className="page-header">
+        <p className="eyebrow">CRUD APPLICATION</p>
+        <h1>Item Manager</h1>
+        <p className="subtitle">
+          Create, view, update, and delete your items.
+        </p>
+      </header>
 
-      <section
-        style={{
-          padding: 24,
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          marginTop: 28,
-          marginBottom: 32,
-        }}
-      >
-        <h2>{editingId === null ? "Add a new item" : "Edit item"}</h2>
+      {error && (
+        <div className="error-message" role="alert">
+          {error}
+        </div>
+      )}
 
-        <form
+      <section className="section">
+        <h2>{editingItem ? "Edit item" : "Add a new item"}</h2>
+
+        <ItemForm
+          editingItem={editingItem}
           onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: 12 }}
-        >
-          <label htmlFor="name">Item name</label>
-          <input
-            id="name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Gold Ring"
-            required
-            maxLength={200}
-            style={{ padding: 12, border: "1px solid #ccc", borderRadius: 6 }}
-          />
-
-          <label htmlFor="description">Description (optional)</label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Write a short description"
-            rows={3}
-            style={{ padding: 12, border: "1px solid #ccc", borderRadius: 6 }}
-          />
-
-          <button
-            type="submit"
-            style={{
-              padding: 12,
-              border: 0,
-              borderRadius: 6,
-              background: "#3730a3",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            {editingId === null ? "Add item" : "Save changes"}
-          </button>
-
-          {editingId !== null && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditingId(null);
-                setName("");
-                setDescription("");
-                setMessage("");
-              }}
-              style={{ padding: 10, cursor: "pointer" }}
-            >
-              Cancel editing
-            </button>
-          )}
-        </form>
+          onCancel={() => setEditingItem(null)}
+          saving={saving}
+        />
       </section>
 
-      <section>
-        <h2>Your items ({items.length})</h2>
+      <section className="section">
+        <div className="list-header">
+          <h2>Your items</h2>
+          <span className="item-count">{items.length} items</span>
+        </div>
 
-        {message && <p role="status">{message}</p>}
-        {loading && <p>Loading items...</p>}
-
-        {!loading && items.length === 0 && (
-          <p>No items yet. Add your first item above.</p>
+        {loading ? (
+          <p className="status-message">Loading items...</p>
+        ) : (
+          <ItemList
+            items={items}
+            onEdit={setEditingItem}
+            onDelete={handleDelete}
+            deletingId={deletingId}
+          />
         )}
-
-        {items.map((item) => (
-          <article
-            key={item.id}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 16,
-              padding: 16,
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              marginBottom: 12,
-            }}
-          >
-            <div>
-              <h3>{item.name}</h3>
-              <p>{item.description || "No description provided."}</p>
-              <small>
-                Created: {new Date(item.createdAt).toLocaleDateString()}
-              </small>
-            </div>
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => editItem(item)} style={{ padding: 8 }}>
-                Edit
-              </button>
-              <button
-                onClick={() => void deleteItem(item.id)}
-                style={{ padding: 8, color: "#b91c1c" }}
-              >
-                Delete
-              </button>
-            </div>
-          </article>
-        ))}
       </section>
     </main>
   );
