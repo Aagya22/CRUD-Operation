@@ -2,6 +2,8 @@ import "reflect-metadata";
 import { DataSource } from "typeorm";
 import dotenv from "dotenv";
 import { Item } from "../models/item";
+import { User } from "../models/user";
+import { RefreshSession } from "../models/refreshSession";
 
 dotenv.config();
 
@@ -12,7 +14,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  entities: [Item],
+  entities: [Item, User, RefreshSession],
   synchronize: true,
   logging: false,
 });
